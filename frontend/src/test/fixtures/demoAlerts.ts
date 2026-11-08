@@ -1,4 +1,4 @@
-import type { Alert } from "./types";
+import type { Alert } from "@/data/types";
 
 export const demoEvents = [
   { type: "medical_bill", label: "Medical bill" },

@@ -1,15 +1,15 @@
+import { useSteadyCatalog } from "@/data/steady-catalog";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Lightbulb, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import {
   Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { consumeHealthHighlight, useAccounts, useCustomer, useInstitutions, useMetrics, useMonthly, useAccountsSummary, useSelectedInstitution } from "@/data/api";
+import { useCustomer, useAccountsSummary, useSelectedInstitution } from "@/data/api";
 import { useAlertsStore } from "@/data/alertsStore";
 import { SEVERITY } from "@/components/Status";
-import { HealthMetricCard } from "@/components/HealthMetricCard";
 import { formatDate, formatMonthLabel, formatCurrency, formatCompactCurrency, formatRate, humanize } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -42,35 +42,45 @@ function Card({ title, children, className }: { title?: string; children: ReactN
 
 function Dashboard() {
   const customer = useCustomer();
-  const accounts = useAccounts();
+  const { data, error } = useSteadyCatalog();
+  const selected = data?.profile?.customerId === customer.id ? data : null;
   const summary = useAccountsSummary(useSelectedInstitution());
-  const { months, spendingByCategoryLastMonth } = useMonthly();
-  const metrics = useMetrics();
-  const institutions = useInstitutions();
-  const linked = institutions.some((bank) => bank.id === "inst_platypus" && bank.status === "synced");
-  const [highlighted, setHighlighted] = useState<string[]>([]);
   const { alerts } = useAlertsStore();
-  useEffect(() => {
-    if (!linked) { setHighlighted([]); return; }
-    const changed = consumeHealthHighlight();
-    if (!changed.length) return;
-    setHighlighted(changed);
-    const timer = setTimeout(() => setHighlighted([]), 2500);
-    return () => clearTimeout(timer);
-  }, [linked]);
 
   const topAlert = alerts.find((a) => !a.read);
-  const monthData = months.map((m) => ({ ...m, label: formatMonthLabel(m.month) }));
-  const categories = spendingByCategoryLastMonth;
-  const assets = accounts.filter((a) => ["checking", "savings", "ira"].includes(a.type));
-  const debts = accounts.filter((a) => !["checking", "savings", "ira"].includes(a.type));
+  const monthData = (selected?.months ?? []).map((month) => ({
+    label: formatMonthLabel(month.month),
+    income: Number(month.incomeCents) / 100,
+    spending: Number(month.spendingCents) / 100,
+    creditCardPayments: Number(month.creditCardPaymentsCents) / 100,
+    creditCardBalance: Number(month.creditCardBalanceCents) / 100,
+  }));
+  const categories = (selected?.spendingCategories ?? [])
+    .filter((row) => row.customerId === customer.id)
+    .map((row) => ({
+      label: humanize(row.category),
+      amount: Number(row.amountCents) / 100,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const accounts = (selected?.accounts ?? []).map((account) => ({
+    id: account.accountId,
+    type: account.accountType,
+    balance: Number(account.balanceCents) / 100,
+    yield: account.annualYieldBasisPoints / 100,
+    apr: account.aprBasisPoints / 100,
+    monthlyPayment: Number(account.monthlyPaymentCents) / 100,
+  }));
+  const creditLimit = selected?.profile ? Number(selected.profile.creditLimitCents) / 100 : undefined;
+  const assets = accounts.filter((a) => ["checking", "savings", "ira", "cd"].includes(a.type));
+  const debts = accounts.filter((a) => !["checking", "savings", "ira", "cd"].includes(a.type));
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 md:px-8">
       <div className="space-y-6 rounded-3xl bg-background">
       <div>
         <h1 className="text-center text-2xl font-bold tracking-tight md:text-3xl">Your Financial Health</h1>
-        <p className="mt-1 text-sm text-muted-foreground">As of {formatDate(customer.asOf)}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{customer.asOf ? `As of ${formatDate(customer.asOf)}` : "PNC financial snapshot"}</p>
       </div>
 
       {topAlert && (() => {
@@ -91,11 +101,10 @@ function Dashboard() {
         );
       })()}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((metric) => <HealthMetricCard key={metric.id} metric={metric} months={months} highlight={highlighted.includes(metric.id)} />)}
-      </div>
+      <p className="text-sm text-muted-foreground">Health metrics are unavailable for this dataset.</p>
       </div>
 
+      {!selected && <p role={error ? "alert" : "status"} className="text-sm text-muted-foreground">{error ?? "Loading PNC data for the selected customer…"}</p>}
       <Card title="Money in vs. money out">
         <div className="h-72">
           <ResponsiveContainer>
@@ -107,7 +116,7 @@ function Dashboard() {
               <Legend wrapperStyle={{ fontSize: 13 }} />
               <Bar isAnimationActive={false} dataKey="income" name="Income" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
               <Bar isAnimationActive={false} dataKey="spending" name="Spending" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
-              <Bar isAnimationActive={false} dataKey="debtCosts" name="Debt payments & interest" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
+              <Bar isAnimationActive={false} dataKey="creditCardPayments" name="Credit card payments" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -122,8 +131,8 @@ function Dashboard() {
                 <XAxis dataKey="label" tick={axisTick} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 12000]} tickFormatter={formatCompactCurrency} tick={axisTick} axisLine={false} tickLine={false} width={44} />
                 <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={tooltipStyle} />
-                <ReferenceLine y={customer.creditLimit} stroke="var(--risk)" strokeDasharray="6 4"
-                  label={{ value: `Limit ${formatCurrency(customer.creditLimit)}`, position: "insideBottomRight", fill: "var(--risk)", fontSize: 12 }} />
+                {creditLimit !== undefined && <ReferenceLine y={creditLimit} stroke="var(--risk)" strokeDasharray="6 4"
+                  label={{ value: `Limit ${formatCurrency(creditLimit)}`, position: "insideBottomRight", fill: "var(--risk)", fontSize: 12 }} />}
                 <Line isAnimationActive={false} type="monotone" dataKey="creditCardBalance" name="Card balance" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} />
               </LineChart>
             </ResponsiveContainer>
@@ -131,16 +140,22 @@ function Dashboard() {
         </Card>
 
         <Card title="Where your money went last month">
-          <div className="h-64">
-            <ResponsiveContainer>
-              <BarChart data={categories} layout="vertical" margin={{ left: 8 }}>
-                <XAxis type="number" tickFormatter={(v) => formatCurrency(v)} tick={axisTick} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="label" tick={axisTick} axisLine={false} tickLine={false} width={80} />
-                <Tooltip formatter={(v: number) => formatCurrency(v)} contentStyle={tooltipStyle} cursor={{ fill: "var(--muted)" }} />
-                <Bar isAnimationActive={false} dataKey="amount" name="Spent" fill="var(--chart-1)" radius={[0, 6, 6, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {categories.length ? (
+            <div className="h-64">
+              <ResponsiveContainer>
+                <BarChart data={categories} layout="vertical" margin={{ left: 8 }}>
+                  <XAxis type="number" tickFormatter={formatCompactCurrency} tick={axisTick} />
+                  <YAxis type="category" dataKey="label" tick={axisTick} width={100} />
+                  <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={tooltipStyle} />
+                  <Bar isAnimationActive={false} dataKey="amount" name="Spent" fill="var(--chart-1)" radius={[0, 6, 6, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {selected ? "No categorized spending for the latest statement month." : "Loading category totals…"}
+            </p>
+          )}
         </Card>
       </div>
 
@@ -150,7 +165,7 @@ function Dashboard() {
             {assets.map((a) => (
               <li key={a.id} className="flex items-center justify-between py-3">
                 <div>
-                  <p className="font-medium">{a.nickname ?? humanize(a.type)}</p>
+                  <p className="font-medium">{humanize(a.type)}</p>
                   <p className="font-serif text-sm text-muted-foreground">{a.yield ? `${formatRate(a.yield)} yield` : "No yield"}</p>
                 </div>
                 <p className="font-serif text-lg font-semibold tabular-nums">{formatCurrency(a.balance)}</p>
@@ -158,7 +173,7 @@ function Dashboard() {
             ))}
           </ul>
           <div className="mt-2 flex justify-between border-t pt-3 font-bold">
-            <span>Total</span><span className="font-serif text-lg tabular-nums text-good">{formatCurrency(summary.totalAssets)}</span>
+            <span>Total</span><span className="font-serif text-lg tabular-nums text-good">{summary ? formatCurrency(summary.totalAssets) : "—"}</span>
           </div>
         </Card>
         <Card title="What you owe">
@@ -166,7 +181,7 @@ function Dashboard() {
             {debts.map((a) => (
               <li key={a.id} className="flex items-center justify-between py-3">
                 <div>
-                  <p className="font-medium">{a.nickname ?? humanize(a.type)}</p>
+                  <p className="font-medium">{humanize(a.type)}</p>
                   <p className="font-serif text-sm text-muted-foreground">{formatRate(a.apr ?? 0)} APR · {formatCurrency(a.monthlyPayment ?? 0)}/mo</p>
                 </div>
                 <p className="font-serif text-lg font-semibold tabular-nums">{formatCurrency(a.balance)}</p>
@@ -176,8 +191,8 @@ function Dashboard() {
           <div className="mt-2 flex justify-between border-t pt-3 font-bold">
             <span>Total</span>
             <span className="text-right tabular-nums">
-              <span className="font-serif text-lg">{formatCurrency(summary.totalDebts)}</span>
-              <span className="font-serif block text-sm font-medium text-muted-foreground">{formatCurrency(summary.totalMonthlyDebtPayments)}/mo</span>
+              <span className="font-serif text-lg">{summary ? formatCurrency(summary.totalDebts) : "—"}</span>
+              <span className="font-serif block text-sm font-medium text-muted-foreground">{summary ? formatCurrency(summary.totalMonthlyDebtPayments) : "—"}/mo</span>
             </span>
           </div>
         </Card>

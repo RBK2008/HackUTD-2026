@@ -27,10 +27,10 @@ export const Route = createFileRoute("/coach")({
 });
 
 const suggestions = [
-  "Why is my credit card use red?",
-  "Where did my money go last month?",
-  "How much of my income goes to debt?",
-  "What if I pay $50 more on my card each month?",
+  "What is my listed-account net worth?",
+  "What was my spending last month?",
+  "What are my monthly debt payments?",
+  "Tell me about my Checking",
 ];
 type DisplayMessage = ChatMessage & { verified?: boolean; failed?: boolean; retry?: PendingRequest };
 type PendingRequest = { text: string; history: ChatMessage[]; context?: { alertId?: string } };
@@ -102,7 +102,7 @@ function Coach() {
     <div className="mx-auto grid h-[calc(100dvh-124px)] max-w-6xl grid-cols-1 md:h-[calc(100dvh-64px)] lg:grid-cols-[minmax(0,1fr)_280px]">
       <section className="flex min-h-0 min-w-0 flex-col" aria-label="Coach chat">
         <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-5 md:px-8">
-          <div><h1 className="text-2xl font-bold">Coach</h1><p className="mt-1 text-sm text-muted-foreground">Ask anything about your accounts, spending, and debt.</p></div>
+          <div><h1 className="text-2xl font-bold">Coach</h1><p className="mt-1 text-sm text-muted-foreground">Ask about your selected customer’s accounts, spending, and debt.</p></div>
           <Sheet open={infoOpen} onOpenChange={setInfoOpen}>
             <SheetTrigger asChild><Button variant="secondary" size="sm" className="lg:hidden"><Info />Info</Button></SheetTrigger>
             <SheetContent className="w-[min(90vw,360px)] overflow-y-auto bg-card">
@@ -124,7 +124,7 @@ function Coach() {
           <div className="space-y-4">
             {messages.map((message) => (
               <article key={message.id} className={cn("w-fit max-w-[92%] break-words rounded-lg px-4 py-3 shadow-soft sm:max-w-[85%]", message.role === "user" ? "ml-auto bg-primary text-primary-foreground" : "border bg-card text-card-foreground")}>
-                {message.role === "coach" && <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">AI explanation</p>}
+                {message.role === "coach" && <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Coach response</p>}
                 <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</p>
                 {(message.sources?.length ?? 0) > 0 && <div className="mt-3 flex flex-wrap gap-1.5">{message.sources?.map((source) => <span key={source} className="rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">{source}</span>)}</div>}
                 {message.verified && <span className="mt-3 inline-flex items-center gap-1 rounded-md bg-good-soft px-2 py-1 text-[11px] font-semibold text-good"><Check className="h-3 w-3" />Numbers checked</span>}

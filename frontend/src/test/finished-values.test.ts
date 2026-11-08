@@ -1,14 +1,7 @@
 import { expect, it } from "vitest";
-import { getAccountsSummary } from "@/data/api";
-import { mockData, accountDetails } from "@/data/mock";
-import { platypusAccounts, platypusDetails } from "@/data/bankFixtures";
+import { mockData, accountDetails } from "./fixtures/mock";
+import { platypusAccounts, platypusDetails } from "./fixtures/bankFixtures";
 
-it("returns exact supplied combined totals", () => {
-  expect(getAccountsSummary("all", [{ id: "inst_pnc" }, { id: "inst_platypus" }])).toEqual({ totalAssets: 89857.68, totalDebts: 341218.59, totalMonthlyDebtPayments: 3319.06 });
-});
-it("keeps the PNC summary unchanged after linking", () => {
-  expect(getAccountsSummary("inst_pnc", [{ id: "inst_pnc" }, { id: "inst_platypus" }])).toEqual({ totalAssets: 68725.87, totalDebts: 334551.41, totalMonthlyDebtPayments: 3119.04 });
-});
 it("receives every supplied change and tone rather than deriving them from history", () => {
   expect([...mockData.accounts, ...platypusAccounts].map((account) => [account.id, account.change12m, account.changeTone])).toEqual([
     ["acct_pnc_checking", -1151, "neutral"], ["acct_pnc_savings", 623, "good"], ["acct_pnc_ira", 3170, "good"],

@@ -6,7 +6,7 @@ import type { AccountView } from "@/lib/accounts";
 import { formatCurrency, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export const accountIcons: Record<AccountType, typeof Wallet> = { checking: Wallet, savings: PiggyBank, ira: TrendingUp, credit_card: CreditCard, auto_loan: Car, personal_loan: HandCoins, mortgage: Home };
+export const accountIcons: Record<AccountType, typeof Wallet> = { checking: Wallet, savings: PiggyBank, cd: PiggyBank, ira: TrendingUp, credit_card: CreditCard, auto_loan: Car, personal_loan: HandCoins, mortgage: Home };
 
 export function AccountCard({ account, onOpen, bankName, arriving }: { account: AccountView; onOpen: () => void; bankName?: string | undefined; arriving?: boolean }) {
   const Icon = accountIcons[account.type];
@@ -18,8 +18,8 @@ export function AccountCard({ account, onOpen, bankName, arriving }: { account: 
     <p className="mt-2 font-serif text-3xl font-semibold">{formatCurrency(account.balance)}</p>
     <p className="mt-1 font-serif text-base text-muted-foreground">{account.rateLabel}</p>
     <div className="mt-4 w-full"><AccountHistory account={account} compact /></div>
-    <p className={cn("mt-2 flex items-center justify-center gap-1 text-xs", account.changeTone === "good" ? "text-good" : account.changeTone === "bad" ? "text-risk" : "text-muted-foreground")}><Arrow className="h-4 w-4 shrink-0" /><span><span className="font-serif text-sm">{account.changeLabel}</span>{account.changeTone === "bad" && <span className="ml-1 font-semibold">· Rising</span>}</span></p>
-    {account.type === "credit_card" && <div className="mt-4 w-full">
+    {account.changeLabel && <p className={cn("mt-2 flex items-center justify-center gap-1 text-xs", account.changeTone === "good" ? "text-good" : account.changeTone === "bad" ? "text-risk" : "text-muted-foreground")}><Arrow className="h-4 w-4 shrink-0" /><span><span className="font-serif text-sm">{account.changeLabel}</span>{account.changeTone === "bad" && <span className="ml-1 font-semibold">· Rising</span>}</span></p>}
+    {account.type === "credit_card" && account.utilization !== undefined && <div className="mt-4 w-full">
       <div className="relative h-2.5 rounded-sm bg-muted" role="progressbar" aria-label="Credit limit usage" aria-valuenow={account.usagePercent} aria-valuemin={0} aria-valuemax={200}>
         <div className={cn("h-full rounded-sm", account.overLimit ? "bg-risk" : "bg-primary")} style={{ width: account.usageWidth }} />
         <span className="absolute top-[-3px] h-4 border-l-2 border-foreground" style={{ left: account.limitWidth }} />

@@ -59,6 +59,7 @@ import MySelectedPncAlertsRow from "./my_selected_pnc_alerts_table";
 import MySelectedPncMonthlyStatementsRow from "./my_selected_pnc_monthly_statements_table";
 import MySelectedPncMonthlySummaryRow from "./my_selected_pnc_monthly_summary_table";
 import MySelectedPncProfileRow from "./my_selected_pnc_profile_table";
+import MySelectedPncSpendingByCategoryRow from "./my_selected_pnc_spending_by_category_table";
 import MySelectedPncTotalsRow from "./my_selected_pnc_totals_table";
 import MySelectedPncTransactionsRow from "./my_selected_pnc_transactions_table";
 import PersonRow from "./person_table";
@@ -159,6 +160,13 @@ const tablesSchema = __schema({
     constraints: [
     ],
   }, MySelectedPncProfileRow),
+  mySelectedPncSpendingByCategory: __table({
+    name: 'my_selected_pnc_spending_by_category',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MySelectedPncSpendingByCategoryRow),
   mySelectedPncTotals: __table({
     name: 'my_selected_pnc_totals',
     indexes: [

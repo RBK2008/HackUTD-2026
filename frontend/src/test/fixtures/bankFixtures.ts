@@ -1,4 +1,4 @@
-import type { Account, AccountDetail, Institution } from "./types";
+import type { Account, AccountDetail, Institution } from "@/data/types";
 
 export const pncInstitution: Institution = { id: "inst_pnc", name: "PNC Bank", source: "pnc", status: "synced", lastSynced: "2026-10-31T09:00:00" };
 export const platypusInstitution: Institution = { id: "inst_platypus", name: "First Platypus Bank", source: "plaid", status: "synced", lastSynced: "" };

@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Building2, HeartPulse } from "lucide-react";
 import { useState } from "react";
@@ -27,6 +28,7 @@ function SignIn() {
     if (!customerId) return;
     setLoading(true);
     try { await selectCustomer(customerId); await navigate({ to: "/" }); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Could not load the customer."); }
     finally { setLoading(false); }
   }
   return <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">

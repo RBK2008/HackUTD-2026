@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
 import { toast } from "sonner";
-import { mockData } from "./mock";
 import { useSession } from "./session";
 import { updateSteadyAlert, useSteadyCatalog } from "./steady-catalog";
 import type { Alert } from "./types";
@@ -28,7 +27,7 @@ export function alertsReducer(state: AlertsState, action: AlertsAction): AlertsS
     case "resetDemo":
       return { alerts: state.alerts.filter((alert) => !alert.isDemo), usedDemoIds: [] };
     case "resetAll":
-      return { alerts: mockData.alerts, usedDemoIds: [] };
+      return { alerts: [], usedDemoIds: [] };
     case "clearLocal":
       return { alerts: [], usedDemoIds: [] };
     case "add":

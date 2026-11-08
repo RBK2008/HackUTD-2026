@@ -24,11 +24,7 @@ export function CustomerCombobox({ value, onChange, id }: { value: string; onCha
             {customers.map((customer) => (
               <CommandItem key={customer.id} value={`${customer.id} ${customer.name}`} onSelect={() => { onChange(customer.id); setOpen(false); }} className="items-start py-2.5">
                 <Check className={cn("mt-0.5", value === customer.id ? "opacity-100" : "opacity-0")} />
-                <span className="min-w-0 flex-1"><span className="block font-medium">{customer.name}</span><span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-good" />{customer.health.good} good</span><span>·</span>
-                  <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-watch" />{customer.health.watch} watch</span><span>·</span>
-                  <span className="inline-flex items-center gap-1"><i className="h-2 w-2 rounded-full bg-risk" />{customer.health.risk} risk</span>
-                </span></span>
+                <span className="min-w-0 flex-1 font-medium">{customer.name}</span>
               </CommandItem>
             ))}
           </CommandGroup></CommandList>

@@ -1,5 +1,6 @@
+import { useSteadyCatalog } from "@/data/steady-catalog";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Bell, Building2, Check, Landmark, LoaderCircle, LockKeyhole, Pencil, Plus, RefreshCw, Send, Unplug, UserRound, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { BankConnectionDialog } from "@/components/BankConnectionDialog";
@@ -52,6 +53,7 @@ function SettingsPage() {
     if (!switchId) return;
     setSwitching(true);
     try { await selectCustomer(switchId); toast.success("Demo dataset switched."); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Could not switch datasets."); }
     finally { setSwitching(false); }
   }
   return <div className="mx-auto max-w-6xl px-4 py-6 md:px-8 md:py-8">
@@ -63,14 +65,14 @@ function SettingsPage() {
           <div className="rounded-xl bg-muted p-4"><p className="text-xs font-medium text-muted-foreground">Current mode</p><p className="mt-1 font-medium">{session.mode === "bank" ? "Connected bank" : `Demo dataset: ${customer.name}`}</p></div>
           <div className="mt-5 space-y-2"><Label htmlFor="switch-dataset">Switch dataset</Label><CustomerCombobox id="switch-dataset" value={switchId} onChange={setSwitchId} /></div>
           <div className="mt-4 flex flex-wrap gap-3">
-            <AlertDialog><AlertDialogTrigger asChild><Button disabled={!switchId || switching}>Switch</Button></AlertDialogTrigger><AlertDialogContent className="bg-card"><AlertDialogHeader><AlertDialogTitle>Switch demo dataset?</AlertDialogTitle><AlertDialogDescription>Switching will reset alerts, linked banks, and your coach chat for this demo.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => void switchDataset()}>Switch dataset</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+            <AlertDialog><AlertDialogTrigger asChild><Button disabled={!switchId || switching}>Switch</Button></AlertDialogTrigger><AlertDialogContent className="bg-card"><AlertDialogHeader><AlertDialogTitle>Switch demo dataset?</AlertDialogTitle><AlertDialogDescription>Switching loads the selected customer’s cloud data and clears your Coach chat.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => void switchDataset()}>Switch dataset</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
             <Button variant="outline" onClick={() => { signOut(); void navigate({ to: "/signin" }); }}>Sign out</Button>
           </div>
         </Section>
         <LinkedBanksSettings />
         <NotificationSettings />
         <Section id="privacy" title="Privacy & AI" description="Understand what the coach receives and reset demo content.">
-          <p className="text-sm leading-relaxed text-muted-foreground">Your coach uses Google Gemini. It receives summaries of your account data to answer questions. Numbers are calculated by our system, not by the AI.</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">Coach can answer supported questions using the selected customer’s SpacetimeDB data. AI explanations are unavailable in this build.</p>
           <div className="mt-5 flex flex-wrap gap-3"><Button variant="outline" onClick={() => { clearCoachChat(); toast.success("Coach chat history cleared."); }}>Clear coach chat history</Button>
             <AlertDialog><AlertDialogTrigger asChild><Button variant="outline" className="text-risk">Reset demo</Button></AlertDialogTrigger><AlertDialogContent className="bg-card"><AlertDialogHeader><AlertDialogTitle>Reset the demo?</AlertDialogTitle><AlertDialogDescription>This restores the original alerts, linked banks, nicknames, and coach chat.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => { resetDemoData(); toast.success("Demo reset to its original state."); }}>Reset demo</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
           </div>
@@ -101,9 +103,21 @@ function LinkedBanksSettings() {
   </Section>;
 }
 
+const notificationDeliveryAvailable = false;
+
 function NotificationSettings() {
   const session = useSession();
   const [settings, setSettings] = useState<AlertSettings>(session.alertSettings);
+  const { data } = useSteadyCatalog();
+  const cardBalanceRising = data?.settings?.cardBalanceRising;
+  useEffect(() => {
+    if (cardBalanceRising !== undefined) {
+      setSettings((current) => ({
+        ...current,
+        alertTypes: { ...current.alertTypes, cardBalanceRising },
+      }));
+    }
+  }, [cardBalanceRising]);
   const [phone, setPhone] = useState(phoneFromE164(session.alertSettings.phoneE164));
   const [sending, setSending] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -115,18 +129,20 @@ function NotificationSettings() {
   async function testAlert() {
     setSending(true);
     try { await sendTestAlert(toPhoneE164(phone)); toast.success(`Test alert sent to ${formatUsPhone(phone)}`); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Could not send test alert."); }
     finally { setSending(false); }
   }
   async function save() {
     setSaving(true);
     try { await saveAlertSettings({ ...settings, phoneE164: toPhoneE164(phone) }); toast.success("Alert settings saved"); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Could not save alert settings."); }
     finally { setSaving(false); }
   }
-  return <Section id="notifications" title="Alerts & notifications" description="Choose what Steady sends and where it goes. No real texts are sent in this demo.">
-    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"><div className="space-y-2"><Label htmlFor="alert-phone">Phone number for iMessage alerts</Label><div className="flex"><span className="flex h-9 items-center rounded-l-md border border-r-0 bg-muted px-3 text-sm">+1</span><Input id="alert-phone" inputMode="numeric" autoComplete="tel-national" placeholder="(555) 123-4567" value={phone} onChange={(event) => setPhone(formatUsPhone(event.target.value))} className="rounded-l-none" aria-describedby="phone-error" /></div>{phoneError && <p id="phone-error" role="alert" className="text-xs text-risk">{phoneError}</p>}</div><Button variant="outline" disabled={!canUsePhone || sending} onClick={() => void testAlert()}>{sending ? <LoaderCircle className="motion-safe:animate-spin" /> : <Send />}Send test alert</Button></div>
+  return <Section id="notifications" title="Alerts & notifications" description="The card balance preference is saved in SpacetimeDB and applies across demo customers. Phone delivery is unavailable.">
+    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end"><div className="space-y-2"><Label htmlFor="alert-phone">Phone number for iMessage alerts</Label><div className="flex"><span className="flex h-9 items-center rounded-l-md border border-r-0 bg-muted px-3 text-sm">+1</span><Input id="alert-phone" inputMode="numeric" autoComplete="tel-national" placeholder="(555) 123-4567" value={phone} onChange={(event) => setPhone(formatUsPhone(event.target.value))} className="rounded-l-none" aria-describedby="phone-error" /></div>{phoneError && <p id="phone-error" role="alert" className="text-xs text-risk">{phoneError}</p>}</div><Button variant="outline" disabled={!canUsePhone || sending || !notificationDeliveryAvailable} onClick={() => void testAlert()}>{sending ? <LoaderCircle className="motion-safe:animate-spin" /> : <Send />}Send test alert</Button></div>
     <div className="mt-4 flex items-start gap-3"><Checkbox id="alert-consent" checked={settings.consent} onCheckedChange={(checked) => patch({ consent: checked === true })} /><Label htmlFor="alert-consent" className="text-sm font-normal leading-relaxed">I agree to receive financial alerts by text message. Reply STOP to unsubscribe.</Label></div>
     <div className="mt-6 space-y-4"><h3 className="text-sm font-semibold">Channels</h3><SettingToggle id="channel-app" label="In the app" checked disabled onChange={() => undefined} /><SettingToggle id="channel-imessage" label="iMessage" checked={settings.channels.imessage} onChange={(checked) => patch({ channels: { app: true, imessage: checked } })} /></div>
-    <div className="mt-6"><h3 className="text-sm font-semibold">Alert types</h3><div className="mt-2 divide-y">{alertTypeOptions.map((type) => <div key={type.key} className="flex items-center justify-between gap-4 py-3"><div><Label htmlFor={`type-${type.key}`}>{type.label}</Label><p className="mt-0.5 text-xs text-muted-foreground">{type.description}</p></div><Switch id={`type-${type.key}`} checked={settings.alertTypes[type.key]} onCheckedChange={(checked) => patch({ alertTypes: { ...settings.alertTypes, [type.key]: checked } })} /></div>)}</div></div>
+    <div className="mt-6"><h3 className="text-sm font-semibold">Alert types</h3><div className="mt-2 divide-y">{alertTypeOptions.map((type) => <div key={type.key} className="flex items-center justify-between gap-4 py-3"><div><Label htmlFor={`type-${type.key}`}>{type.label}</Label><p className="mt-0.5 text-xs text-muted-foreground">{type.description}</p></div><Switch id={`type-${type.key}`} disabled={type.key !== "cardBalanceRising"} checked={settings.alertTypes[type.key]} onCheckedChange={(checked) => patch({ alertTypes: { ...settings.alertTypes, [type.key]: checked } })} /></div>)}</div></div>
     <div className="mt-5 grid gap-5 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="phone-severity">Send to my phone</Label><Select value={settings.phoneSeverity} onValueChange={(value: AlertSettings["phoneSeverity"]) => patch({ phoneSeverity: value })}><SelectTrigger id="phone-severity"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="critical">Critical only</SelectItem><SelectItem value="critical_warning">Critical and warnings</SelectItem><SelectItem value="all">All alerts</SelectItem></SelectContent></Select></div></div>
     <div className="mt-6 rounded-xl bg-muted p-4"><SettingToggle id="hide-amounts" label="Hide dollar amounts in phone alerts" checked={settings.hideAmounts} onChange={(checked) => patch({ hideAmounts: checked })} /><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Alerts can appear on your lock screen. When on, we'll say 'Your card is over its limit' instead of showing the balance.</p></div>
     <div className="mt-5 rounded-xl border p-4"><SettingToggle id="quiet-hours" label="Quiet hours" checked={settings.quietHours.enabled} onChange={(checked) => patch({ quietHours: { ...settings.quietHours, enabled: checked } })} /><div className="mt-3 grid grid-cols-2 gap-3"><TimeSelect id="quiet-start" label="Start" value={settings.quietHours.start} disabled={!settings.quietHours.enabled} onChange={(start) => patch({ quietHours: { ...settings.quietHours, start } })} /><TimeSelect id="quiet-end" label="End" value={settings.quietHours.end} disabled={!settings.quietHours.enabled} onChange={(end) => patch({ quietHours: { ...settings.quietHours, end } })} /></div><p className="mt-3 text-xs text-muted-foreground">Critical alerts are still sent during quiet hours.</p></div>

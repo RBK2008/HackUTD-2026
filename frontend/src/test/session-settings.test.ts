@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAccountsStore } from "@/data/accountsStore";
-import { demoCustomers } from "@/data/customerFixtures";
-import { mockData } from "@/data/mock";
+import { accountsStore } from "@/data/accountsStore";
+import { demoCustomers } from "./fixtures/customerFixtures";
+import { mockData } from "./fixtures/mock";
 import { sessionStore } from "@/data/session";
 import { formatUsPhone, phoneDigits, toPhoneE164 } from "@/lib/settings";
 
@@ -32,20 +32,11 @@ describe("Session and bank settings", () => {
     expect(saved).not.toContain("public-sandbox");
     expect(saved).not.toContain("link-sandbox");
   });
-  it("syncs an existing bank for exactly 1.5 seconds and preserves account nicknames until reset", async () => {
-    vi.useFakeTimers();
-    const store = createAccountsStore();
-    store.renameAccount("acct_pnc_checking", "Everyday checking");
-    expect(store.getSnapshot().accounts[0]?.nickname).toBe("Everyday checking");
-    const syncing = store.syncBank("inst_pnc");
-    expect(store.getSnapshot().institutions[0]?.status).toBe("syncing");
-    await vi.advanceTimersByTimeAsync(1499);
-    expect(store.getSnapshot().institutions[0]?.status).toBe("syncing");
-    await vi.advanceTimersByTimeAsync(1); await syncing;
-    expect(store.getSnapshot().institutions[0]?.status).toBe("synced");
-    store.reset();
-    expect(store.getSnapshot().accounts[0]?.nickname).toBeUndefined();
-    expect(store.getSnapshot().institutions.map((bank) => bank.id)).toEqual(["inst_pnc"]);
+  it("keeps a live account nickname until reset", () => {
+    accountsStore.renameAccount("A-C012-CHECKING", "Everyday checking");
+    expect(accountsStore.getSnapshot().nicknames["A-C012-CHECKING"]).toBe("Everyday checking");
+    accountsStore.reset();
+    expect(accountsStore.getSnapshot().nicknames).toEqual({});
   });
 });
 

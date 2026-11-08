@@ -13,6 +13,7 @@ function readCatalog(connection: DbConnection) {
     transactions: Array.from(db.mySelectedPncTransactions.iter()),
     statements: Array.from(db.mySelectedPncMonthlyStatements.iter()),
     months: Array.from(db.mySelectedPncMonthlySummary.iter()),
+    spendingCategories: Array.from(db.mySelectedPncSpendingByCategory.iter()),
     alerts: Array.from(db.mySelectedPncAlerts.iter()),
     settings: Array.from(db.myDemoAlertSettings.iter())[0] ?? null,
   };
@@ -64,6 +65,7 @@ function startCatalogSubscription() {
         db.mySelectedPncTransactions,
         db.mySelectedPncMonthlyStatements,
         db.mySelectedPncMonthlySummary,
+        db.mySelectedPncSpendingByCategory,
         db.mySelectedPncAlerts,
         db.myDemoAlertSettings,
       ];
@@ -98,6 +100,7 @@ function startCatalogSubscription() {
           tables.mySelectedPncTransactions,
           tables.mySelectedPncMonthlyStatements,
           tables.mySelectedPncMonthlySummary,
+          tables.mySelectedPncSpendingByCategory,
           tables.mySelectedPncAlerts,
           tables.myDemoAlertSettings,
         ]);
@@ -120,7 +123,7 @@ function subscribe(listener: () => void) {
   };
 }
 
-function getSnapshot() {
+export function getSteadyCatalogSnapshot() {
   return state;
 }
 
@@ -129,7 +132,7 @@ function getServerSnapshot() {
 }
 
 export function useSteadyCatalog() {
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  return useSyncExternalStore(subscribe, getSteadyCatalogSnapshot, getServerSnapshot);
 }
 
 export async function saveSteadyAlertPreference(cardBalanceRising: boolean) {

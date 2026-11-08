@@ -1,4 +1,4 @@
-export type AssetType = "checking" | "savings" | "ira";
+export type AssetType = "checking" | "savings" | "ira" | "cd";
 export type DebtType = "credit_card" | "auto_loan" | "personal_loan" | "mortgage";
 export type AccountType = AssetType | DebtType;
 
@@ -12,7 +12,7 @@ export interface Customer {
 export type CustomerProfile = {
   id: string;
   name: string;
-  health: { good: number; watch: number; risk: number };
+  health?: { good: number; watch: number; risk: number };
 };
 
 export type ConnectedItem = {
@@ -52,10 +52,10 @@ export interface Account {
   monthlyPayment?: number;
   creditLimit?: number;
   nickname?: string;
-  change12m: number;
-  changeMagnitude: number;
-  changeDirection: "up" | "down";
-  changeTone: "good" | "bad" | "neutral";
+  change12m?: number;
+  changeMagnitude?: number;
+  changeDirection?: "up" | "down";
+  changeTone?: "good" | "bad" | "neutral";
   utilization?: number;
   overLimit?: boolean;
   usageWidth?: string;
@@ -86,7 +86,7 @@ export interface MonthlyRecord {
   creditCardBalance: number;
   savingsBalance: number;
   debtToIncome: number | null;
-  cashFlow: number;
+  cashFlow: number | null;
 }
 
 export type SpendingByCategory = { category: string; label: string; amount: number }[];

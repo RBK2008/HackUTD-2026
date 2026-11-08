@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { alertsReducer } from "@/data/alertsStore";
-import { createDemoAlert } from "@/data/demoAlerts";
-import { injectDemoEvent, sendCoachMessage } from "@/data/api";
-import { mockData } from "@/data/mock";
+import { createDemoAlert } from "./fixtures/demoAlerts";
+import { mockData } from "./fixtures/mock";
 import { filterAlerts, groupAlerts } from "@/lib/alerts";
 
 const initial = () => ({ alerts: mockData.alerts, usedDemoIds: [] as string[] });
@@ -54,17 +53,5 @@ describe("Demo events", () => {
     expect(alert.reason).toContain(other);
     expect(alert.suggestedAction).toContain(action);
     expect(alert).toMatchObject({ severity, metricId, date: "2026-11-08", channels: ["app", "imessage"], read: false, isDemo: true });
-  });
-  it("waits 800ms and supports Coach explanation of new alerts", async () => {
-    vi.useFakeTimers();
-    try {
-      let settled = false;
-      const promise = injectDemoEvent("rate_increase").then((alert) => { settled = true; return alert; });
-      await vi.advanceTimersByTimeAsync(799); expect(settled).toBe(false);
-      await vi.advanceTimersByTimeAsync(1); const alert = await promise; expect(settled).toBe(true);
-      const reply = sendCoachMessage(`Explain this alert: ${alert.title}`, [], { alertId: alert.id });
-      await vi.advanceTimersByTimeAsync(1200);
-      expect((await reply).reply).toBe(`${alert.reason} ${alert.suggestedAction}`);
-    } finally { vi.useRealTimers(); }
   });
 });

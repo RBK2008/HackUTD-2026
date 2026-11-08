@@ -24,7 +24,7 @@ export function CoachContext({ onAsk }: { onAsk: (alert: Alert) => void }) {
         <h3 className="mb-3 text-sm font-semibold">Unread alerts</h3>
         <div className="space-y-3">{unread.map((alert) => <CoachAlertCard key={alert.id} alert={alert} onAsk={onAsk} />)}</div>
       </section>
-      <p className="text-center text-xs leading-relaxed text-muted-foreground">Answers use your account data as of {formatDate(customer.asOf)}.</p>
+      <p className="text-center text-xs leading-relaxed text-muted-foreground">{customer.asOf ? `Answers use ${customer.id} account data as of ${formatDate(customer.asOf)}.` : "Waiting for the selected customer’s account data."}</p>
     </div>
   );
 }

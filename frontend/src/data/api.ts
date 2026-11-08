@@ -1,74 +1,134 @@
 // Data access layer. Components must read data only through these hooks.
 // Swap the internals for real API calls later; signatures stay the same.
-import { accountDetails, accountsSummaries, mockCoachReplies, mockData } from "./mock";
 import { accountPresentation } from "@/lib/accounts";
-import { createDemoAlert, demoEvents } from "./demoAlerts";
-import type { Account, Alert, AlertSettings, ChatMessage, CoachReply, Customer, CustomerProfile, Metric, MonthlyRecord, SpendingByCategory } from "./types";
-import { accountsStore, useAccountsStore, type AccountChange } from "./accountsStore";
-import { demoCustomers } from "./customerFixtures";
+import { formatCurrencyExact, humanize } from "@/lib/format";
+import type { Account, AccountDetail, AccountType, AlertSettings, ChatMessage, CoachReply, Customer, CustomerProfile, Metric, MonthlyRecord } from "./types";
+import { accountsStore, useAccountsStore } from "./accountsStore";
 import { sessionStore, useSession } from "./session";
 import { selectSteadyCustomer } from "./steady-connection";
-import { useSteadyTotals } from "./steady-totals";
+import { getSteadyCatalogSnapshot, saveSteadyAlertPreference, useSteadyCatalog } from "./steady-catalog";
 
-export function useCustomerList(): CustomerProfile[] { return demoCustomers; }
-
-export function useCustomer(): Customer {
-  const session = useSession();
-  const selected = demoCustomers.find((customer) => customer.id === session.selectedCustomerId);
-  return { ...mockData.customer, id: selected?.id ?? "C024", name: selected?.name ?? mockData.customer.name };
+export function useCustomerList(): CustomerProfile[] {
+  const { data } = useSteadyCatalog();
+  return (data?.customers ?? []).map(({ customerId }) => ({ id: customerId, name: `Demo Customer (${customerId})` }));
 }
 
-export function useAccounts(): Account[] {
-  const state = useAccountsStore();
-  return selectedAccounts(state);
+export function useCustomer(): Customer {
+  const { selectedCustomerId } = useSession();
+  const { data } = useSteadyCatalog();
+  const profile = data?.profile?.customerId === selectedCustomerId ? data.profile : null;
+  return {
+    id: selectedCustomerId ?? "",
+    name: selectedCustomerId ? `Demo Customer (${selectedCustomerId})` : "Demo Customer",
+    asOf: profile ? data?.accounts[0]?.asOfDate ?? "" : "",
+    creditLimit: profile ? Number(profile.creditLimitCents) / 100 : 0,
+  };
 }
 
 export function selectedAccounts(state: { accounts: Account[]; selectedInstitutionId: string }) {
   return state.accounts.filter((account) => state.selectedInstitutionId === "all" || account.institutionId === state.selectedInstitutionId);
 }
 
-export function getAccountDetails(accounts = mockData.accounts, details = accountDetails) {
+export function getAccountDetails(accounts: Account[] = [], details: AccountDetail[] = []) {
   return accounts.flatMap((account) => {
     const detail = details.find((item) => item.id === account.id);
     return detail ? [accountPresentation(account, { ...detail, label: account.nickname ?? detail.label })] : [];
   });
 }
 
+const pncAccountTypes = new Set<string>([
+  "checking", "savings", "ira", "cd", "credit_card", "auto_loan", "personal_loan", "mortgage",
+]);
+
+function useLiveAccountDetails(institutionFilter: string) {
+  const state = useAccountsStore();
+  const { selectedCustomerId } = useSession();
+  const { data } = useSteadyCatalog();
+  const pncLinked = state.institutions.some((bank) => bank.id === "inst_pnc");
+  if (!pncLinked || !["all", "inst_pnc"].includes(institutionFilter) ||
+      !data || data.profile?.customerId !== selectedCustomerId) return [];
+
+  const accounts: Account[] = [];
+  const details: AccountDetail[] = [];
+  for (const row of data.accounts) {
+    if (row.customerId !== selectedCustomerId || !pncAccountTypes.has(row.accountType)) continue;
+    const type = row.accountType as AccountType;
+    const label = type === "cd" ? "Certificate of deposit" : humanize(type);
+    const balance = Number(row.balanceCents) / 100;
+    const chart = data.statements
+      .filter((statement) => statement.accountId === row.accountId)
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .slice(-12)
+      .map((statement) => ({
+        month: statement.month,
+        balance: Number(statement.closingBalanceCents) / 100,
+      }));
+    const recent = data.transactions
+      .filter((transaction) => transaction.accountId === row.accountId)
+      .sort((a, b) => b.postedDate.localeCompare(a.postedDate) || b.transactionId.localeCompare(a.transactionId))
+      .slice(0, 8)
+      .map((transaction) => {
+        const amount = Number(transaction.amountCents) / 100;
+        const displayValue = Number(transaction.balanceChangeCents) / 100;
+        const displayLabel = transaction.description || humanize(transaction.category);
+        return {
+          date: transaction.postedDate,
+          label: displayLabel,
+          displayLabel,
+          amount,
+          displayValue,
+          incoming: displayValue >= 0,
+        };
+      });
+
+    accounts.push({
+      id: row.accountId,
+      institutionId: "inst_pnc",
+      type,
+      balance,
+      ...(state.nicknames[row.accountId] ? { nickname: state.nicknames[row.accountId] } : {}),
+      yield: row.annualYieldBasisPoints / 100,
+      apr: row.aprBasisPoints / 100,
+      monthlyPayment: Number(row.monthlyPaymentCents) / 100,
+      ...(type === "credit_card" ? { creditLimit: Number(data.profile.creditLimitCents) / 100 } : {}),
+    });
+    details.push({
+      id: row.accountId,
+      institutionId: "inst_pnc",
+      type,
+      label,
+      history: chart.map((point) => point.balance),
+      chart,
+      recent,
+      coachReply: {
+        reply: `Your ${label} balance is ${formatCurrencyExact(balance)}.`,
+        sources: ["PNC account snapshot"],
+        verified: true,
+      },
+    });
+  }
+
+  return getAccountDetails(accounts, details);
+}
 export function useAccountDetails() {
-  const state = useAccountsStore();
-  return getAccountDetails(selectedAccounts(state), state.details);
+  return useLiveAccountDetails(useAccountsStore().selectedInstitutionId);
 }
+
 export function useAllAccountDetails() {
-  const state = useAccountsStore();
-  return getAccountDetails(state.accounts, state.details);
+  return useLiveAccountDetails("all");
 }
-export function getAccountsSummary(institutionFilter: string, institutions: { id: string }[]) {
-  const pnc = institutions.some((bank) => bank.id === "inst_pnc");
-  const platypus = institutions.some((bank) => bank.id === "inst_platypus");
-  if (institutionFilter === "inst_pnc") return pnc ? accountsSummaries.pnc : accountsSummaries.empty;
-  if (institutionFilter === "inst_platypus") return platypus ? accountsSummaries.platypus : accountsSummaries.empty;
-  return pnc && platypus ? accountsSummaries.allLinked : pnc ? accountsSummaries.pnc : platypus ? accountsSummaries.platypus : accountsSummaries.empty;
-}
+
 export function useAccountsSummary(institutionFilter: string) {
-  const state = useAccountsStore();
-  const session = useSession();
-  const { totals } = useSteadyTotals();
-  const linkedInstitutions = state.institutions.filter((bank) =>
-    state.accounts.some((account) => account.institutionId === bank.id),
-  );
-  const hasPnc = linkedInstitutions.some((bank) => bank.id === "inst_pnc");
-  const hasDemoBank = linkedInstitutions.some((bank) => bank.id === "inst_platypus");
-  const showPncTotals =
-    hasPnc &&
-    (institutionFilter === "inst_pnc" || (institutionFilter === "all" && !hasDemoBank));
-
-  if (!showPncTotals) {
-    return getAccountsSummary(institutionFilter, linkedInstitutions);
-  }
-
-  if (!totals || totals.customerId !== session.selectedCustomerId) {
-    return accountsSummaries.empty;
-  }
+  const { institutions } = useAccountsStore();
+  const { selectedCustomerId } = useSession();
+  const { data } = useSteadyCatalog();
+  const totals = data?.totals;
+  if (
+    !institutions.some((bank) => bank.id === "inst_pnc") ||
+    !["all", "inst_pnc"].includes(institutionFilter) ||
+    !totals ||
+    totals.customerId !== selectedCustomerId
+  ) return null;
 
   return {
     totalAssets: Number(totals.assetsCents) / 100,
@@ -79,32 +139,29 @@ export function useAccountsSummary(institutionFilter: string) {
 export function useSelectedInstitution() { return useAccountsStore().selectedInstitutionId; }
 export function selectInstitution(institutionId: string) { accountsStore.selectInstitution(institutionId); }
 export function useInstitutions() { return useAccountsStore().institutions; }
-export function useAllAccounts() { return useAccountsStore().accounts; }
-export function subscribeToAccountChanges(callback: (change: AccountChange) => void) { return accountsStore.subscribeToAccountChanges(callback); }
-let healthHighlightPending: string[] = [];
-export async function connectBank() {
-  await accountsStore.connectBank();
-  healthHighlightPending = mockData.metricsAfterLinking.filter((metric) => mockData.metrics.find((base) => base.id === metric.id)?.status !== metric.status).map((metric) => metric.id);
-}
-export function consumeHealthHighlight() {
-  const pending = healthHighlightPending;
-  healthHighlightPending = [];
-  return pending;
-}
 export function disconnectBank(institutionId: string) { accountsStore.disconnectBank(institutionId); }
 export function reconnectBank(institutionId: string) { return accountsStore.reconnectBank(institutionId); }
 export function syncBank(institutionId: string) { return accountsStore.syncBank(institutionId); }
 export function renameAccount(accountId: string, nickname: string) { accountsStore.renameAccount(accountId, nickname); }
 
-export function useMonthly(): { months: MonthlyRecord[]; spendingByCategoryLastMonth: SpendingByCategory } {
-  return { months: mockData.monthly, spendingByCategoryLastMonth: mockData.spendingByCategoryLastMonth };
+export function useMonthly(): { months: MonthlyRecord[] } {
+  const { selectedCustomerId } = useSession();
+  const { data } = useSteadyCatalog();
+  return {
+    months: (data?.months ?? []).filter((month) => month.customerId === selectedCustomerId).map((month) => ({
+      month: month.month,
+      income: Number(month.incomeCents) / 100,
+      spending: Number(month.spendingCents) / 100,
+      debtCosts: Number(month.creditCardPaymentsCents) / 100,
+      creditCardBalance: Number(month.creditCardBalanceCents) / 100,
+      savingsBalance: Number(month.savingsBalanceCents) / 100,
+      debtToIncome: null,
+      cashFlow: null,
+    })),
+  };
 }
 
-export function useMetrics(): Metric[] {
-  const linked = useAccountsStore().institutions.some((bank) => bank.id === "inst_platypus" && bank.status === "synced");
-  return linked ? mockData.metricsAfterLinking : mockData.metrics;
-}
-export function useAlerts(): Alert[] { return mockData.alerts; }
+export function useMetrics(): Metric[] { return []; }
 
 function notifyReset(type: "reset-all" | "clear-coach") {
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(`steady:${type}`));
@@ -127,48 +184,69 @@ export function signOut() {
   sessionStore.signOut();
 }
 
-export async function createLinkToken(): Promise<string> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 500));
-  return `link-sandbox-mock-${Math.random().toString(36).slice(2)}`;
-}
-export async function exchangePublicToken(publicToken: string, institutionName: string): Promise<{ itemId: string; institutionId: string }> {
-  void publicToken; void institutionName;
-  await new Promise<void>((resolve) => setTimeout(resolve, 1500));
-  return { itemId: `item-mock-${Math.random().toString(36).slice(2)}`, institutionId: "inst_platypus" };
-}
-export async function sendTestAlert(phoneE164: string): Promise<void> {
-  void phoneE164;
-  await new Promise<void>((resolve) => setTimeout(resolve, 1200));
-}
-export async function saveAlertSettings(settings: AlertSettings): Promise<void> {
-  await Promise.resolve();
-  sessionStore.saveAlertSettings(settings);
-}
-export async function injectDemoEvent(eventType: string): Promise<Alert> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 800));
-  return createDemoAlert(eventType, new Date().toISOString().slice(0, 10));
+export async function sendTestAlert(_phoneE164: string): Promise<void> {
+  throw new Error("Phone delivery is unavailable until the notification service is connected.");
 }
 
-// Single replacement boundary for a future backend /api/chat call.
-export async function sendCoachMessage(message: string, history: ChatMessage[], context?: { alertId?: string }): Promise<CoachReply> {
-  void history;
-  await new Promise<void>((resolve) => setTimeout(resolve, 1200));
-  const text = message.toLowerCase();
-  const state = accountsStore.getSnapshot();
-  const account = getAccountDetails(selectedAccounts(state), state.details).find((item) => text === `tell me about my ${item.label.toLowerCase()}`);
-  if (account) return account.coachReply;
-  if (text.includes("explain this alert")) {
-    const availableAlerts = [...mockData.alerts, ...demoEvents.map((event) => createDemoAlert(event.type, ""))];
-    const alert = context?.alertId ? availableAlerts.find((a) => a.id === context.alertId) : availableAlerts.find((a) => text.includes(a.title.toLowerCase()));
-    if (alert) return { reply: `${alert.reason} ${alert.suggestedAction}`, sources: ["Alerts"], verified: true };
-  } else if (text.includes("credit") && /red|use|utilization/.test(text)) {
-    return mockCoachReplies[0];
-  } else if (/money go|spend|spending/.test(text)) {
-    return mockCoachReplies[1];
-  } else if (text.includes("income") && text.includes("debt")) {
-    return mockCoachReplies[2];
-  } else if (/\$50|50 more|pay more/.test(text)) {
-    return mockCoachReplies[3];
+export async function saveAlertSettings(settings: AlertSettings): Promise<void> {
+  await saveSteadyAlertPreference(settings.alertTypes.cardBalanceRising);
+  sessionStore.saveAlertSettings(settings);
+}
+
+export async function sendCoachMessage(
+  message: string,
+  _history: ChatMessage[],
+  context?: { alertId?: string },
+): Promise<CoachReply> {
+  const { data } = getSteadyCatalogSnapshot();
+  const customerId = sessionStore.getSnapshot().selectedCustomerId;
+  const unavailable = { reply: "Coach can show cloud account balances, totals, monthly spending, and current alerts. AI explanations are unavailable.", sources: [], verified: false };
+  if (!data || !customerId || data.profile?.customerId !== customerId) return unavailable;
+
+  const currency = (cents: bigint) => formatCurrencyExact(Number(cents) / 100);
+  if (context?.alertId) {
+    const alert = data.alerts.find((row) => row.customerId === customerId && row.id === context.alertId);
+    return alert ? {
+      reply: `Your credit card closing balance increased by ${currency(alert.increaseCents)} in ${alert.month} compared with the previous month.`,
+      sources: ["SpacetimeDB · PNC alerts"],
+      verified: true,
+    } : unavailable;
   }
-  return mockCoachReplies[4];
+
+  const question = message.trim().toLowerCase();
+  const totals = data.totals?.customerId === customerId ? data.totals : null;
+  if (totals && (question.includes("net worth") || question.includes("how much do i have and owe"))) {
+    return {
+      reply: `Your listed accounts have ${currency(totals.assetsCents)} in assets and ${currency(totals.liabilitiesCents)} in liabilities. Your listed-account net worth is ${currency(totals.netWorthCents)}.`,
+      sources: ["SpacetimeDB · PNC account totals"],
+      verified: true,
+    };
+  }
+  if (totals && question.includes("monthly debt payments")) {
+    return {
+      reply: `Your scheduled monthly debt payments total ${currency(totals.monthlyDebtPaymentsCents)}.`,
+      sources: ["SpacetimeDB · PNC account totals"],
+      verified: true,
+    };
+  }
+  if (question.includes("spending last month")) {
+    const latest = data.months.filter((row) => row.customerId === customerId)
+      .sort((a, b) => b.month.localeCompare(a.month))[0];
+    if (latest) return {
+      reply: `Your latest statement month is ${latest.month}. Recorded spending was ${currency(latest.spendingCents)} and recorded income was ${currency(latest.incomeCents)}.`,
+      sources: ["SpacetimeDB · PNC monthly summary"],
+      verified: true,
+    };
+  }
+
+  const account = data.accounts.find((row) => {
+    const label = row.accountType === "cd" ? "Certificate of deposit" : humanize(row.accountType);
+    return row.customerId === customerId &&
+      message.trim().toLowerCase() === `tell me about my ${label.toLowerCase()}`;
+  });
+  return account ? {
+    reply: `The balance for ${humanize(account.accountType)} is ${currency(account.balanceCents)}.`,
+    sources: ["SpacetimeDB · PNC account snapshot"],
+    verified: true,
+  } : unavailable;
 }

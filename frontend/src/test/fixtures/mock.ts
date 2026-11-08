@@ -1,4 +1,4 @@
-import type { AccountDetail, CoachReply, MockData } from "./types";
+import type { AccountDetail, CoachReply, MockData } from "@/data/types";
 
 export const mockData: MockData = {
   customer: { id: "C024", name: "Demo Customer (C024)", asOf: "2026-10-31", creditLimit: 5332.24 },

@@ -42,7 +42,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link to="/alerts" className="relative rounded-full p-2 hover:bg-muted" aria-label={`${unread} unread alerts`}><Bell className="h-5 w-5 text-foreground" />{unread > 0 && <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-risk px-1 text-[11px] font-bold text-primary-foreground">{unread}</span>}</Link>
           </div>
         </header>
-        {session.selectedCustomerId !== "C024" && <div className="border-b bg-accent px-4 py-2 text-center text-xs text-accent-foreground">Preview: showing sample data until the database is connected.</div>}
         <main className="flex-1">{children}</main>
       </div>
 

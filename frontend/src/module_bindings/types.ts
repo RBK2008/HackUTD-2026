@@ -130,6 +130,9 @@ export type MySelectedPncMonthlySummary = __Infer<typeof MySelectedPncMonthlySum
 export const MySelectedPncProfile = __t.object("MySelectedPncProfile", {});
 export type MySelectedPncProfile = __Infer<typeof MySelectedPncProfile>;
 
+export const MySelectedPncSpendingByCategory = __t.object("MySelectedPncSpendingByCategory", {});
+export type MySelectedPncSpendingByCategory = __Infer<typeof MySelectedPncSpendingByCategory>;
+
 export const MySelectedPncTotals = __t.object("MySelectedPncTotals", {});
 export type MySelectedPncTotals = __Infer<typeof MySelectedPncTotals>;
 
@@ -190,6 +193,14 @@ export const PncMonthlyStatement = __t.object("PncMonthlyStatement", {
   transactionCount: __t.u32(),
 });
 export type PncMonthlyStatement = __Infer<typeof PncMonthlyStatement>;
+
+export const PncSpendingCategoryRow = __t.object("PncSpendingCategoryRow", {
+  customerId: __t.string(),
+  month: __t.string(),
+  category: __t.string(),
+  amountCents: __t.u64(),
+});
+export type PncSpendingCategoryRow = __Infer<typeof PncSpendingCategoryRow>;
 
 export const PncTransaction = __t.object("PncTransaction", {
   transactionId: __t.string(),

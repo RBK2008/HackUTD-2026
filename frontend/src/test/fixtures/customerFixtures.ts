@@ -1,4 +1,4 @@
-import type { CustomerProfile } from "./types";
+import type { CustomerProfile } from "@/data/types";
 
 const healthCounts = [
   [2, 2, 0], [4, 0, 0], [2, 1, 1], [0, 2, 2], [1, 0, 3],
